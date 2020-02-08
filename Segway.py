@@ -1,62 +1,75 @@
+import random
+
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import odeint
 
 # nastawy
-Kc = -2000 * 1.0
+Kp = -2000 * 1.0
 tauI = 1
 tauD = 2
 
+# STALE
+R = 0.483 / 2
+M = 47.3
+m = 63.968
+J = 73.5041
+l = 1.0400
+L = 0.0513
+kT = 0.75
+kbemf = 0.5
+ra = 1.4
+c1 = 0.01
+c2 = 0.01
+g = 9.81
+gain = 2
+a = kT / ra
+b = kT * kbemf / (R * ra)
+A = -a / J
+B = m * g / J
+g1 = a / (R * (m + M))
+g2 = (b / R + c2) / (M + m)
+g3 = (b * g1 - a * g2) / (-a)
+g4 = c1 / J
+g5 = (M * g * L + m * g * l) / J
+
 # definicja modelu Segwaya
-def segway(s):
-    R = 0.483/2
-    M = 47.3
-    m = 63.968
-    J = 73.5041
-    l = 1.0400
-    L = 0.0513
-    kT = 0.75
-    kbemf = 0.5
-    ra = 1.4
-    c1 = 0.01
-    c2 = 0.01
-    g = 9.81
-    a = kT/ra
-    b = kT*kbemf/(R*ra)
-    A = -a/J
-    B = m*g/J
-    g1 = a/(R*(m+M))
-    g2 = (b/R+c2)/(M+m)
-    g3 = (b*g1-a*g2)/(-a)
-    g4 = c1/J
-    g5 = (M*g*L+m*g*l)/J
-    V = g1/s+g2
-    d = B / (s * s + g4 * s - g5)
-    Theta = (A*s+A*g3) / (s*s*s + (g4+g2)*s*s + (g4*g2-g5)*s - g2*g5)
-    Theta = Theta * vin + d * din #TODO
-    xdot = np.zeros(3)
+def segway(s,dTheta,vin,din):
+    V = gain * vin * g1/(s+g2)
+    d = B / 1
+    Theta = dTheta
+    Theta = (A*s+A*g3) / (s*g2+0.00000001)
+    Theta = Theta * vin + d * din
+    Theta = Theta * 1 / (s*s +g4*s-g5)
+    xdot = np.zeros(2)
     xdot[0] = V
     xdot[1] = Theta
-    xdot[2] = d
     return xdot
 
 # Wartości początkowe
 V_ss = 1.00
-Theta_ss = 1
+Theta_ss = 2
 d_ss = 0.01
-x0 = np.empty(3)
+x0 = np.empty(2)
 x0[0] = V_ss
 x0[1] = Theta_ss
-x0[2] = d_ss
 
 
 # Przepływ czasu symulacji
-s = np.linspace(0, 5, 1000)
+s = np.linspace(0, 1, 100)
 
+random.seed(None)
 # Zmienna do wykresu
 V = np.ones(len(s)) * V_ss
 Theta = np.ones(len(s)) * Theta_ss
-d = np.ones(len(s)) * d_ss
+d = np.ones(len(s)) * 1
+for i in range(len(s)-1):
+    if (i % 10) == 0:
+        d[i+1] = d[i] + 0
+    elif i>5000 & i<700:
+        d[i+1] = d[i] + 0.00010
+    else:
+        d[i + 1] = d[i]
 
 
 # Zmienne do obliczeń
@@ -69,52 +82,44 @@ P = np.zeros(len(s))   # proportional
 I = np.zeros(len(s))   # integral
 D = np.zeros(len(s))   # derivative
 sp = np.zeros(len(s))  # set point
-sp[0:100] = 10
-sp[100:] = 20
+sp[0:100] = 0
+sp[100:] = 0
 
 # Ograniczenia
 op_hi = 1000
 op_lo = 0
 
 pv[0] = V_ss
-# loop through time steps    
-for i in range(len(s)-1):
+# loop through time steps
+
+for i in range(0,len(s)-1):
     delta_t = s[i+1]-s[i]
     e[i] = sp[i] - pv[i]
-    if i >= 1:  # calculate starting on second cycle
+    if i >= 1: 
         dpv[i] = (pv[i]-pv[i-1])/delta_t
         ie[i] = ie[i-1] + e[i] * delta_t
-    P[i] = Kc * e[i]
-    I[i] = Kc/tauI * ie[i]
-    D[i] = - Kc * tauD * dpv[i]
-    op[i] = op[0] + P[i] + I[i] + D[i]
-    if op[i] > op_hi:  # check upper limit
-        op[i] = op_hi
-        ie[i] = ie[i] - e[i] * delta_t # anti-reset windup
-    if op[i] < op_lo:  # check lower limit
-        op[i] = op_lo
-        ie[i] = ie[i] - e[i] * delta_t # anti-reset windup
-    ts = [s[i],s[i+1]] #TODO
-    u[i+1] = op[i] #TODO
-    y = odeint(segway,x0,ts,args=()) #TODO
-    Ca[i+1] = y[-1][0] #TODO
-    T[i+1] = y[-1][1] #TODO
-    x0[0] = Ca[i+1] #TODO
-    x0[1] = T[i+1] #TODO
-    pv[i+1] = T[i+1] #TODO
-op[len(s)-1] = op[len(s)-2] #TODO
-ie[len(s)-1] = ie[len(s)-2] #TODO
-P[len(s)-1] = P[len(s)-2] #TODO
-I[len(s)-1] = I[len(s)-2] #TODO
-D[len(s)-1] = D[len(s)-2] #TODO
+    P[i] = Kp * e[i]
+    I[i] = Kp/tauI * ie[i]
+    D[i] = Kp * tauD * dpv[i]
+    op[i] = P[i] + I[i] + D[i]
+    op[i] = max(op_lo,min(op_hi,op[i]))
+    y=segway(s[i],op[i],V[i],d[i])
+    Theta[i+1] = y[0]
+    V[i+1] = y[1]
+    pv[i+1] = Theta[i+1]
+op[len(s)-1] = op[len(s)-2]
+ie[len(s)-1] = ie[len(s)-2]
+P[len(s)-1] = P[len(s)-2]
+I[len(s)-1] = I[len(s)-2]
+D[len(s)-1] = D[len(s)-2]
 
 # Wyniki zapisane do pliku
 # Column 1 = czas
 # Column 2 = prędkość
 # Column 3 = odhylenie Theta
 # Column 4 = wyhylenie d
-data = np.vstack((s, V, Theta, d)) # vertical stack
-data = data.T             # transpose data
+data = np.vstack((s, V, Theta, d)) # zapis poziomy
+data = data.T             # ttranspozycja
 np.savetxt('data_wyjściowe.txt', data, delimiter=',')
     
 # Plot the results
